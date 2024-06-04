@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
         perror("Error in listen()");
         exit(1);
     }
-    printf("[srv] server[%s:%n] is initializing!\n",ipAddress,port);
+    printf("[srv] server[%s:%d] is initializing!\n",ipAddress,port);
     while(!signal_flag){
         struct sockaddr_in client_addr;
         socklen_t client_addrlen = sizeof(client_addr);
