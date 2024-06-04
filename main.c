@@ -11,7 +11,6 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-#include <endian.h>
 
 #define PDU_SIZE segment_size
 const size_t segment_size = 20;
@@ -102,11 +101,26 @@ void server(int connect_socket) {
         }
 
         char *pdu_ptr = pdu; // 保留原始指针以便释放内存
-        uint32_t operator = ntohl(*(int32_t *)pdu_ptr);
-        pdu_ptr += sizeof(int32_t);
-        int64_t operator_1 = be64toh(*(int64_t *)pdu_ptr);
+//        uint32_t operator = ntohl(*(int32_t *)pdu_ptr);
+//        pdu_ptr += sizeof(int32_t);
+//        int64_t operator_1 = be64toh(*(int64_t *)pdu_ptr);
+//        pdu_ptr += sizeof(int64_t);
+//        int64_t operator_2 = be64toh(*(int64_t *)pdu_ptr);
+
+        uint32_t operator;
+        memcpy(&operator, pdu_ptr, sizeof(operator));
+        operator = ntohl(operator);
+        pdu_ptr += sizeof(uint32_t);
+
+        int64_t operator_1;
+        memcpy(&operator_1, pdu_ptr, sizeof(operator_1));
+        operator_1 = be64toh(operator_1);
         pdu_ptr += sizeof(int64_t);
-        int64_t operator_2 = be64toh(*(int64_t *)pdu_ptr);
+
+        int64_t operator_2;
+        memcpy(&operator_2, pdu_ptr, sizeof(operator_2));
+        operator_2 = be64toh(operator_2);
+
 
         int64_t result;
         switch (operator) {
