@@ -1,5 +1,6 @@
 /* Created and modified by WuZhuofan.
  * All rights reserved.*/
+#define _XOPEN_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
