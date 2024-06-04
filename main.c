@@ -1,6 +1,8 @@
 /* Created and modified by WuZhuofan.
  * All rights reserved.*/
 #define _XOPEN_SOURCE
+#define _DEFAULT_SOURCE
+#include <endian.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -12,13 +14,18 @@
 #include <errno.h>
 #include <signal.h>
 
+
 #define PDU_SIZE segment_size
 const size_t segment_size = 20;
 int signal_flag = 0;
 void handle_sigint();
 void server(int connect_socket);
-uint64_t htobe64(uint64_t host_64bits);
-uint64_t be64toh(uint64_t big_endian_64bits);
+void int64ToCharArray(int64_t num, char* arr);
+int64_t charArrayToInt64(const char* arr);
+void reverse_char(char* str);
+void splitPDU(const char* pdu, char** arr1, char** arr2, char** arr3);
+//uint64_t htobe64(uint64_t host_64bits);
+//uint64_t be64toh(uint64_t big_endian_64bits);
 
 int main(int argc, char *argv[]) {
     struct sigaction sa;
@@ -86,6 +93,7 @@ void handle_sigint() {
 void server(int connect_socket) {
     while (1) {
         char *pdu = (char *)malloc(PDU_SIZE);
+        char *arr1,*arr2,*arr3;
         if (!pdu) {
             perror("Error in malloc");
             exit(1);
@@ -101,6 +109,7 @@ void server(int connect_socket) {
         }
 
         char *pdu_ptr = pdu; // 保留原始指针以便释放内存
+        splitPDU(pdu, &arr1, &arr2, &arr3);
 //        uint32_t operator = ntohl(*(int32_t *)pdu_ptr);
 //        pdu_ptr += sizeof(int32_t);
 //        int64_t operator_1 = be64toh(*(int64_t *)pdu_ptr);
@@ -113,14 +122,17 @@ void server(int connect_socket) {
         pdu_ptr += sizeof(uint32_t);
 
         int64_t operator_1;
-        memcpy(&operator_1, pdu_ptr, sizeof(operator_1));
-        operator_1 = be64toh(operator_1);
-        pdu_ptr += sizeof(int64_t);
+        reverse_char(arr2);
+        operator_1 = charArrayToInt64(arr2);
+//        memcpy(&operator_1, pdu_ptr, sizeof(operator_1));
+//        operator_1 = be64toh(operator_1);
+//        pdu_ptr += sizeof(int64_t);
 
         int64_t operator_2;
-        memcpy(&operator_2, pdu_ptr, sizeof(operator_2));
-        operator_2 = be64toh(operator_2);
-
+        reverse_char(arr3);
+        operator_2= charArrayToInt64(arr3);
+//        memcpy(&operator_2, pdu_ptr, sizeof(operator_2));
+//        operator_2 = be64toh(operator_2);
 
         int64_t result;
         switch (operator) {
@@ -161,7 +173,10 @@ void server(int connect_socket) {
         }
 
         free(pdu);
-
+        free(arr1);
+        free(arr2);
+        free(arr3);
+//        result = 5; //test
         int64_t network_result = htobe64(result);
         ssize_t bytes_written = write(connect_socket, &network_result, sizeof(network_result));
         if (bytes_written < 0) {
@@ -170,31 +185,67 @@ void server(int connect_socket) {
         }
     }
 }
-
-uint64_t htobe64(uint64_t host_64bits) {
-    uint64_t result = 0;
-    unsigned char *ptr = (unsigned char *)&result;
-    ptr[0] = (host_64bits >> 56) & 0xFF;
-    ptr[1] = (host_64bits >> 48) & 0xFF;
-    ptr[2] = (host_64bits >> 40) & 0xFF;
-    ptr[3] = (host_64bits >> 32) & 0xFF;
-    ptr[4] = (host_64bits >> 24) & 0xFF;
-    ptr[5] = (host_64bits >> 16) & 0xFF;
-    ptr[6] = (host_64bits >> 8) & 0xFF;
-    ptr[7] = host_64bits & 0xFF;
-    return result;
+void int64ToCharArray(int64_t num, char* arr) {
+    for (int i = 0; i < sizeof(int64_t); i++) {
+        arr[i] = (num >> (8 * i)) & 0xFF;
+    }
 }
 
-uint64_t be64toh(uint64_t big_endian_64bits) {
-    uint64_t result = 0;
-    unsigned char *ptr = (unsigned char *)&big_endian_64bits;
-    result = ((uint64_t)ptr[0] << 56) |
-             ((uint64_t)ptr[1] << 48) |
-             ((uint64_t)ptr[2] << 40) |
-             ((uint64_t)ptr[3] << 32) |
-             ((uint64_t)ptr[4] << 24) |
-             ((uint64_t)ptr[5] << 16) |
-             ((uint64_t)ptr[6] << 8) |
-             (uint64_t)ptr[7];
-    return result;
+int64_t charArrayToInt64(const char* arr) {
+    int64_t num = 0;
+    for (int i = 0; i < sizeof(int64_t); i++) {
+        num |= ((int64_t)(arr[i] & 0xFF)) << (8 * i);
+    }
+    return num;
 }
+
+void reverse_char(char* str){
+    size_t len = strlen(str);
+    size_t start = 0;
+    size_t end = len - 1;
+    while (start < end) {
+        unsigned char temp = str[start];
+        str[start] = str[end];
+        str[end] = temp; //Segmentation fault
+        start++;
+        end--;
+    }
+}
+
+void splitPDU(const char* pdu, char** arr1, char** arr2, char** arr3) {
+    *arr1 = (char*)malloc(4);
+    *arr2 = (char*)malloc(8);
+    *arr3 = (char*)malloc(8);
+    strncpy(*arr1, pdu, 4);
+    strncpy(*arr2, pdu + 4, 8);
+    strncpy(*arr3, pdu + 12, 8);
+}
+
+//
+//uint64_t htobe64(uint64_t host_64bits) {
+//    uint64_t result = 0;
+//    unsigned char *ptr = (unsigned char *)&result;
+//    ptr[0] = (host_64bits >> 56) & 0xFF;
+//    ptr[1] = (host_64bits >> 48) & 0xFF;
+//    ptr[2] = (host_64bits >> 40) & 0xFF;
+//    ptr[3] = (host_64bits >> 32) & 0xFF;
+//    ptr[4] = (host_64bits >> 24) & 0xFF;
+//    ptr[5] = (host_64bits >> 16) & 0xFF;
+//    ptr[6] = (host_64bits >> 8) & 0xFF;
+//    ptr[7] = host_64bits & 0xFF;
+//    return result;
+//}
+//
+//uint64_t be64toh(uint64_t big_endian_64bits) {
+//    uint64_t result = 0;
+//    unsigned char *ptr = (unsigned char *)&big_endian_64bits;
+//    result = ((uint64_t)ptr[0] << 56) |
+//             ((uint64_t)ptr[1] << 48) |
+//             ((uint64_t)ptr[2] << 40) |
+//             ((uint64_t)ptr[3] << 32) |
+//             ((uint64_t)ptr[4] << 24) |
+//             ((uint64_t)ptr[5] << 16) |
+//             ((uint64_t)ptr[6] << 8) |
+//             (uint64_t)ptr[7];
+//    return result;
+//}
