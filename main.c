@@ -11,12 +11,15 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <endian.h>
 
 #define PDU_SIZE segment_size
 const size_t segment_size = 20;
 int signal_flag = 0;
 void handle_sigint();
 void server(int connect_socket);
+uint64_t htobe64(uint64_t host_64bits);
+uint64_t be64toh(uint64_t big_endian_64bits);
 
 int main(int argc, char *argv[]) {
     struct sigaction sa;
@@ -152,4 +155,32 @@ void server(int connect_socket) {
             exit(1);
         }
     }
+}
+
+uint64_t htobe64(uint64_t host_64bits) {
+    uint64_t result = 0;
+    unsigned char *ptr = (unsigned char *)&result;
+    ptr[0] = (host_64bits >> 56) & 0xFF;
+    ptr[1] = (host_64bits >> 48) & 0xFF;
+    ptr[2] = (host_64bits >> 40) & 0xFF;
+    ptr[3] = (host_64bits >> 32) & 0xFF;
+    ptr[4] = (host_64bits >> 24) & 0xFF;
+    ptr[5] = (host_64bits >> 16) & 0xFF;
+    ptr[6] = (host_64bits >> 8) & 0xFF;
+    ptr[7] = host_64bits & 0xFF;
+    return result;
+}
+
+uint64_t be64toh(uint64_t big_endian_64bits) {
+    uint64_t result = 0;
+    unsigned char *ptr = (unsigned char *)&big_endian_64bits;
+    result = ((uint64_t)ptr[0] << 56) |
+             ((uint64_t)ptr[1] << 48) |
+             ((uint64_t)ptr[2] << 40) |
+             ((uint64_t)ptr[3] << 32) |
+             ((uint64_t)ptr[4] << 24) |
+             ((uint64_t)ptr[5] << 16) |
+             ((uint64_t)ptr[6] << 8) |
+             (uint64_t)ptr[7];
+    return result;
 }
