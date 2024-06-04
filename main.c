@@ -13,16 +13,16 @@
 
 #define PDU_SIZE segment_size
 const size_t segment_size = 20;
-int signal_flag=0;
+int signal_flag = 0;
 void handle_sigint();
 void server(int connect_socket);
 
 int main(int argc, char *argv[]) {
     struct sigaction sa;
-    sa.sa_flags=0;
-    sa.sa_handler=handle_sigint;
+    sa.sa_flags = 0;
+    sa.sa_handler = handle_sigint;
     sigemptyset(&sa.sa_mask);
-    sigaction(SIGINT,&sa,NULL);
+    sigaction(SIGINT, &sa, NULL);
 
     char *ipAddress = argv[1];
     int port = atoi(argv[2]);
@@ -46,20 +46,20 @@ int main(int argc, char *argv[]) {
         perror("Error in listen()");
         exit(1);
     }
-    printf("[srv] server[%s:%d] is initializing!\n",ipAddress,port);
-    while(!signal_flag){
+    printf("[srv] server[%s:%d] is initializing!\n", ipAddress, port);
+    while (!signal_flag) {
         struct sockaddr_in client_addr;
         socklen_t client_addrlen = sizeof(client_addr);
         int connect_socket = accept(listen_tcp_socket, (struct sockaddr *)&client_addr, &client_addrlen);
         if (connect_socket < 0) {
-            if(errno==EINTR){
+            if (errno == EINTR) {
                 continue;
-            } else{
+            } else {
                 perror("Error in accept");
                 exit(1);
             }
         }
-        if(connect_socket > 0){
+        if (connect_socket > 0) {
             char client_ip[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
             int client_port = ntohs(client_addr.sin_port);
@@ -75,55 +75,76 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void handle_sigint(){
+void handle_sigint() {
     printf("[srv] SIGINT is coming!\n");
-    signal_flag=1;
+    signal_flag = 1;
 }
 
-void server(int connect_socket){
-    while (1){
-        char *pdu = (char*) malloc(PDU_SIZE);
-        ssize_t bytes_read;
-        bytes_read = read(connect_socket, pdu, PDU_SIZE);
-        if(bytes_read==0){
+void server(int connect_socket) {
+    while (1) {
+        char *pdu = (char *)malloc(PDU_SIZE);
+        if (!pdu) {
+            perror("Error in malloc");
+            exit(1);
+        }
+        ssize_t bytes_read = read(connect_socket, pdu, PDU_SIZE);
+        if (bytes_read == 0) {
+            free(pdu);
+            break;
+        } else if (bytes_read < 0) {
+            perror("Error in read");
             free(pdu);
             break;
         }
-        uint32_t operator = ntohl(*(int32_t*)pdu);
-        pdu += sizeof(int32_t);
-        int64_t operator_1 = be64toh(*(int64_t*)pdu);
-        pdu += sizeof(int64_t);
-        int64_t operator_2 = be64toh(*(int64_t*)pdu);
+
+        char *pdu_ptr = pdu; // 保留原始指针以便释放内存
+        uint32_t operator = ntohl(*(int32_t *)pdu_ptr);
+        pdu_ptr += sizeof(int32_t);
+        int64_t operator_1 = be64toh(*(int64_t *)pdu_ptr);
+        pdu_ptr += sizeof(int64_t);
+        int64_t operator_2 = be64toh(*(int64_t *)pdu_ptr);
+
         int64_t result;
         switch (operator) {
-            case 0x00000001:{
+            case 0x00000001:
                 result = operator_1 + operator_2;
-                printf("[rqt_res] %ld + %ld = %ld\n",operator_1,operator_2,result);
+                printf("[rqt_res] %ld + %ld = %ld\n", operator_1, operator_2, result);
                 break;
-            }
-            case 0x00000002:{
+            case 0x00000002:
                 result = operator_1 - operator_2;
-                printf("[rqt_res] %ld - %ld = %ld\n",operator_1,operator_2,result);
+                printf("[rqt_res] %ld - %ld = %ld\n", operator_1, operator_2, result);
                 break;
-            }
-            case 0x00000004:{
+            case 0x00000004:
                 result = operator_1 * operator_2;
-                printf("[rqt_res] %ld * %ld = %ld\n",operator_1,operator_2,result);
+                printf("[rqt_res] %ld * %ld = %ld\n", operator_1, operator_2, result);
                 break;
-            }
-            case 0x00000008:{
+            case 0x00000008:
+                if (operator_2 == 0) {
+                    fprintf(stderr, "Error: Division by zero\n");
+                    free(pdu);
+                    continue;
+                }
                 result = operator_1 / operator_2;
-                printf("[rqt_res] %ld / %ld = %ld\n",operator_1,operator_2,result);
+                printf("[rqt_res] %ld / %ld = %ld\n", operator_1, operator_2, result);
                 break;
-            }
-            case 0x00000010:{
+            case 0x00000010:
+                if (operator_2 == 0) {
+                    fprintf(stderr, "Error: Division by zero\n");
+                    free(pdu);
+                    continue;
+                }
                 result = operator_1 % operator_2;
-                printf("[rqt_res] %ld %% %ld = %ld\n",operator_1,operator_2,result);
+                printf("[rqt_res] %ld %% %ld = %ld\n", operator_1, operator_2, result);
                 break;
-            }
+            default:
+                fprintf(stderr, "Unknown operator: %u\n", operator);
+                free(pdu);
+                continue;
         }
+
+        free(pdu);
+
         int64_t network_result = htobe64(result);
-        // 发送结果给客户端
         ssize_t bytes_written = write(connect_socket, &network_result, sizeof(network_result));
         if (bytes_written < 0) {
             perror("Error in write");
