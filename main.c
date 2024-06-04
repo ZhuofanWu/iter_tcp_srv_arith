@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
         perror("Error in listen()");
         exit(1);
     }
-    printf("[srv] server[%s:%n] is initializing!",ipAddress,port);
+    printf("[srv] server[%s:%n] is initializing!\n",ipAddress,port);
     while(!signal_flag){
         struct sockaddr_in client_addr;
         socklen_t client_addrlen = sizeof(client_addr);
@@ -70,13 +70,13 @@ int main(int argc, char *argv[]) {
         }
     }
     close(listen_tcp_socket);
-    printf("[srv] listenfd is closed!");
-    printf("[srv] server is going to exit!");
+    printf("[srv] listenfd is closed!\n");
+    printf("[srv] server is going to exit!\n");
     return 0;
 }
 
 void handle_sigint(){
-    printf("[srv] SIGINT is coming!");
+    printf("[srv] SIGINT is coming!\n");
     signal_flag=1;
 }
 
@@ -98,22 +98,27 @@ void server(int connect_socket){
         switch (operator) {
             case 0x00000001:{
                 result = operator_1 + operator_2;
+                printf("[rqt_res] %ld + %ld = %ld\n",operator_1,operator_2,result);
                 break;
             }
             case 0x00000002:{
                 result = operator_1 - operator_2;
+                printf("[rqt_res] %ld - %ld = %ld\n",operator_1,operator_2,result);
                 break;
             }
             case 0x00000004:{
                 result = operator_1 * operator_2;
+                printf("[rqt_res] %ld * %ld = %ld\n",operator_1,operator_2,result);
                 break;
             }
             case 0x00000008:{
                 result = operator_1 / operator_2;
+                printf("[rqt_res] %ld / %ld = %ld\n",operator_1,operator_2,result);
                 break;
             }
             case 0x00000010:{
                 result = operator_1 % operator_2;
+                printf("[rqt_res] %ld %% %ld = %ld\n",operator_1,operator_2,result);
                 break;
             }
         }
