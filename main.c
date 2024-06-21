@@ -1,8 +1,5 @@
 /* Created and modified by WuZhuofan.
  * All rights reserved.*/
-#define _XOPEN_SOURCE
-#define _DEFAULT_SOURCE
-#include <endian.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -13,19 +10,16 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-
-
 #define PDU_SIZE segment_size
+
 const size_t segment_size = 20;
 int signal_flag = 0;
 void handle_sigint();
 void server(int connect_socket);
-void int64ToCharArray(int64_t num, char* arr);
-int64_t charArrayToInt64(const char* arr);
-void reverse_char(char* str);
-void splitPDU(const char* pdu, char** arr1, char** arr2, char** arr3);
-//uint64_t htobe64(uint64_t host_64bits);
-//uint64_t be64toh(uint64_t big_endian_64bits);
+int64_t hton64(int64_t host64);
+int64_t ntoh64(int64_t net64);
+int32_t hton32(int32_t host32);
+int32_t ntoh32(int32_t net32);
 
 int main(int argc, char *argv[]) {
     struct sigaction sa;
@@ -92,47 +86,20 @@ void handle_sigint() {
 
 void server(int connect_socket) {
     while (1) {
-        char *pdu = (char *)malloc(PDU_SIZE);
-        char *arr1,*arr2,*arr3;
-        if (!pdu) {
-            perror("Error in malloc");
-            exit(1);
-        }
+        unsigned char pdu[PDU_SIZE]={};
         ssize_t bytes_read = read(connect_socket, pdu, PDU_SIZE);
-        if (bytes_read == 0) {
-            free(pdu);
-            break;
-        } else if (bytes_read < 0) {
+        if (bytes_read <= 0) {
             perror("Error in read");
-            free(pdu);
             break;
         }
 
-        char *pdu_ptr = pdu; // 保留原始指针以便释放内存
-        splitPDU(pdu, &arr1, &arr2, &arr3);
-//        uint32_t operator = ntohl(*(int32_t *)pdu_ptr);
-//        pdu_ptr += sizeof(int32_t);
-//        int64_t operator_1 = be64toh(*(int64_t *)pdu_ptr);
-//        pdu_ptr += sizeof(int64_t);
-//        int64_t operator_2 = be64toh(*(int64_t *)pdu_ptr);
-
-        uint32_t operator;
-        memcpy(&operator, pdu_ptr, sizeof(operator));
-        operator = ntohl(operator);
-        pdu_ptr += sizeof(uint32_t);
-
-        int64_t operator_1;
-        reverse_char(arr2);
-        operator_1 = charArrayToInt64(arr2);
-//        memcpy(&operator_1, pdu_ptr, sizeof(operator_1));
-//        operator_1 = be64toh(operator_1);
-//        pdu_ptr += sizeof(int64_t);
-
-        int64_t operator_2;
-        reverse_char(arr3);
-        operator_2= charArrayToInt64(arr3);
-//        memcpy(&operator_2, pdu_ptr, sizeof(operator_2));
-//        operator_2 = be64toh(operator_2);
+        int32_t operator; int64_t operator_1; int64_t operator_2;
+        memcpy(&operator,pdu,sizeof(int32_t));
+        memcpy(&operator_1,pdu+ sizeof(int32_t),sizeof(int64_t));
+        memcpy(&operator_2,pdu+ sizeof(int32_t) + sizeof(int64_t),sizeof(int64_t));
+        operator= ntoh32(operator);
+        operator_1= ntoh64(operator_1);
+        operator_2= ntoh64(operator_2);
 
         int64_t result;
         switch (operator) {
@@ -151,7 +118,6 @@ void server(int connect_socket) {
             case 0x00000008:
                 if (operator_2 == 0) {
                     fprintf(stderr, "Error: Division by zero\n");
-                    free(pdu);
                     continue;
                 }
                 result = operator_1 / operator_2;
@@ -160,7 +126,6 @@ void server(int connect_socket) {
             case 0x00000010:
                 if (operator_2 == 0) {
                     fprintf(stderr, "Error: Division by zero\n");
-                    free(pdu);
                     continue;
                 }
                 result = operator_1 % operator_2;
@@ -168,16 +133,10 @@ void server(int connect_socket) {
                 break;
             default:
                 fprintf(stderr, "Unknown operator: %u\n", operator);
-                free(pdu);
                 continue;
         }
 
-        free(pdu);
-        free(arr1);
-        free(arr2);
-        free(arr3);
-//        result = 5; //test
-        int64_t network_result = htobe64(result);
+        int64_t network_result = hton64(result);
         ssize_t bytes_written = write(connect_socket, &network_result, sizeof(network_result));
         if (bytes_written < 0) {
             perror("Error in write");
@@ -185,67 +144,55 @@ void server(int connect_socket) {
         }
     }
 }
-void int64ToCharArray(int64_t num, char* arr) {
-    for (int i = 0; i < sizeof(int64_t); i++) {
-        arr[i] = (num >> (8 * i)) & 0xFF;
-    }
+
+int64_t hton64(int64_t host64) {
+    union {
+        int64_t i64;
+        unsigned char bytes[8];
+    } value;
+
+    value.i64 = host64;
+
+    unsigned char temp = value.bytes[0];
+    value.bytes[0] = value.bytes[7];
+    value.bytes[7] = temp;
+
+    temp = value.bytes[1];
+    value.bytes[1] = value.bytes[6];
+    value.bytes[6] = temp;
+
+    temp = value.bytes[2];
+    value.bytes[2] = value.bytes[5];
+    value.bytes[5] = temp;
+
+    temp = value.bytes[3];
+    value.bytes[3] = value.bytes[4];
+    value.bytes[4] = temp;
+
+    return value.i64;
 }
 
-int64_t charArrayToInt64(const char* arr) {
-    int64_t num = 0;
-    for (int i = 0; i < sizeof(int64_t); i++) {
-        num |= ((int64_t)(arr[i] & 0xFF)) << (8 * i);
-    }
-    return num;
+int64_t ntoh64(int64_t net64) {
+    return hton64(net64);
 }
 
-void reverse_char(char* str){
-    size_t len = strlen(str);
-    size_t start = 0;
-    size_t end = len - 1;
-    while (start < end) {
-        unsigned char temp = str[start];
-        str[start] = str[end];
-        str[end] = temp; //Segmentation fault
-        start++;
-        end--;
-    }
+int32_t hton32(int32_t host32) {
+    union {
+        int32_t i32;
+        unsigned char bytes[4];
+    } value;
+    value.i32=host32;
+    unsigned char temp = value.bytes[0];
+    value.bytes[0] = value.bytes[3];
+    value.bytes[3] = temp;
+
+    temp = value.bytes[1];
+    value.bytes[1] = value.bytes[2];
+    value.bytes[2] = temp;
+
+    return value.i32;
 }
 
-void splitPDU(const char* pdu, char** arr1, char** arr2, char** arr3) {
-    *arr1 = (char*)malloc(4);
-    *arr2 = (char*)malloc(8);
-    *arr3 = (char*)malloc(8);
-    strncpy(*arr1, pdu, 4);
-    strncpy(*arr2, pdu + 4, 8);
-    strncpy(*arr3, pdu + 12, 8);
+int32_t ntoh32(int32_t net32) {
+    return hton32(net32);
 }
-
-//
-//uint64_t htobe64(uint64_t host_64bits) {
-//    uint64_t result = 0;
-//    unsigned char *ptr = (unsigned char *)&result;
-//    ptr[0] = (host_64bits >> 56) & 0xFF;
-//    ptr[1] = (host_64bits >> 48) & 0xFF;
-//    ptr[2] = (host_64bits >> 40) & 0xFF;
-//    ptr[3] = (host_64bits >> 32) & 0xFF;
-//    ptr[4] = (host_64bits >> 24) & 0xFF;
-//    ptr[5] = (host_64bits >> 16) & 0xFF;
-//    ptr[6] = (host_64bits >> 8) & 0xFF;
-//    ptr[7] = host_64bits & 0xFF;
-//    return result;
-//}
-//
-//uint64_t be64toh(uint64_t big_endian_64bits) {
-//    uint64_t result = 0;
-//    unsigned char *ptr = (unsigned char *)&big_endian_64bits;
-//    result = ((uint64_t)ptr[0] << 56) |
-//             ((uint64_t)ptr[1] << 48) |
-//             ((uint64_t)ptr[2] << 40) |
-//             ((uint64_t)ptr[3] << 32) |
-//             ((uint64_t)ptr[4] << 24) |
-//             ((uint64_t)ptr[5] << 16) |
-//             ((uint64_t)ptr[6] << 8) |
-//             (uint64_t)ptr[7];
-//    return result;
-//}
