@@ -10,9 +10,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-#define PDU_SIZE segment_size
 
-const size_t segment_size = 20;
 int signal_flag = 0;
 void handle_sigint();
 void server(int connect_socket);
@@ -86,9 +84,12 @@ void handle_sigint() {
 
 void server(int connect_socket) {
     while (1) {
-        unsigned char pdu[PDU_SIZE]={};
-        ssize_t bytes_read = read(connect_socket, pdu, PDU_SIZE);
-        if (bytes_read <= 0) {
+        unsigned char pdu[20]={};
+        ssize_t bytes_read = read(connect_socket, pdu, 20);
+        if (bytes_read == 0){
+            break;
+        }
+        if (bytes_read < 0) {
             perror("Error in read");
             break;
         }
